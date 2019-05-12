@@ -13,6 +13,9 @@ class WrappingType(BaseType):
 
 
 class NamedType(BaseType):
+    class Meta:
+        pass
+
     def __init_subclass__(cls):
         if not getattr(cls.graphql_type, "func", None):
             cls.graphql_type = classmethod(cached(cls.graphql_type))

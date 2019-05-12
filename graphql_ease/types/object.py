@@ -5,15 +5,12 @@ from graphql import GraphQLObjectType
 
 from ..base import NamedType
 from ..fields import Field, Query, Mutation, Subscription
-
+from ..util import str_to_camel_case
 
 __all__ = ["Object"]
 
 
 class Object(NamedType):
-    class Meta:
-        pass
-
     def __init_subclass__(cls):
         super().__init_subclass__()
         cls._fields = getattr(cls, "_fields", OrderedDict()).copy()
@@ -22,16 +19,17 @@ class Object(NamedType):
         cls._subscriptions = getattr(cls, "_subscriptions", OrderedDict()).copy()
 
         for name, attr in cls.__dict__.items():
+            name_ = str_to_camel_case(name)
             if isinstance(attr, (Field, Query, Mutation, Subscription)):
                 attr.bind(cls)
                 if isinstance(attr, Query):
-                    cls._queries[name] = attr
+                    cls._queries[name_] = attr
                 elif isinstance(attr, Mutation):
-                    cls._mutations[name] = attr
+                    cls._mutations[name_] = attr
                 elif isinstance(attr, Subscription):
-                    cls._subscriptions[name] = attr
+                    cls._subscriptions[name_] = attr
                 elif isinstance(attr, Field):
-                    cls._fields[name] = attr
+                    cls._fields[name_] = attr
 
     @classmethod
     def graphql_fields(cls):

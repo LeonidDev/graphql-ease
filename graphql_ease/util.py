@@ -1,4 +1,4 @@
-__all__ = ["cached"]
+__all__ = ["cached", "str_to_camel_case"]
 
 
 class Cached(object):
@@ -16,3 +16,8 @@ class Cached(object):
 
 
 cached = Cached
+
+
+def str_to_camel_case(str_):
+    str_ = str_.title().replace("_", "")
+    return str_[0].lower() + str_[1:]

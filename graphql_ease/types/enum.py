@@ -23,7 +23,6 @@ class Enum(NamedType):
         pass
 
     def __init_subclass__(cls):
-        print("ENUM!!!", cls)
         super().__init_subclass__()
         cls._values = getattr(cls, "_values", OrderedDict()).copy()
 

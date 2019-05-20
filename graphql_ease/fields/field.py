@@ -7,7 +7,7 @@ from graphql import GraphQLField, GraphQLList, GraphQLNonNull
 __all__ = ["Field"]
 
 
-def _resolve(obj, info):
+def _resolve(obj, info, *_, **__):
     if isinstance(obj, Mapping):
         return obj.get(info.field_name, None)
     else:

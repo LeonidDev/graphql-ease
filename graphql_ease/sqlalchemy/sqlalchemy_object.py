@@ -1,13 +1,16 @@
 from functools import partial
 from enum import Enum
 
-from sqlalchemy import asc, desc
+from sqlalchemy import asc, desc, func
+from sqlalchemy.sql import column
+from sqlalchemy.orm import RelationshipProperty, contains_eager, aliased
 from sqlalchemy.inspection import inspect
 from graphql import GraphQLEnumType
 
 from .converter import column_to_field, relationship_to_field
 from ..types import Object, String, Int
 from ..fields import Field, Argument
+from ..utilities import get_node_fields
 
 
 __all__ = ["SQLAlchemyObject"]
@@ -24,22 +27,95 @@ def resolve_single(cls, obj, info, column, value):
     ).one_or_none()
 
 
-def resolve_many(
-    cls, obj, info, like=[], like_by=[], order=[], order_by=[], page=1, limit=10
-):
-    query = cls.Meta.model.query
+def build_query(model, like=[], like_by=[], order=[], order_by=[], page=0, limit=0):
+    query = model.query
 
     for like_by_, like_ in zip(like_by, like):
-        query = query.filter(getattr(cls.Meta.model, like_by_).like(f"%{like_}%"))
+        query = query.filter(getattr(model, like_by_).like(f"%{like_}%"))
 
     for order_by_, order_ in zip(order_by, order):
         if SQLAOrder.ASC == order_:
-            query = query.order_by(asc(getattr(cls.Meta.model, order_by_)))
+            query = query.order_by(asc(getattr(model, order_by_)))
         else:
-            query = query.order_by(desc(getattr(cls.Meta.model, order_by_)))
+            query = query.order_by(desc(getattr(model, order_by_)))
 
-    query = query.limit(limit).offset(((page - 1) * limit))
+    if limit:
+        query = query.limit(limit)
 
+    if page:
+        query = query.offset(((page - 1) * limit))
+
+    return query
+
+
+def build_sub_query(field, parent, model, arguments):
+    query = model.query
+
+    arguments = {
+        argument_def["name"]: argument_def["value"] for argument_def in arguments
+    }
+
+    print(field, arguments)
+
+    filter_by = arguments.get("filter_by", [])
+    if not isinstance(filter_by, list):
+        filter_by = [filter_by]
+    filter_ = arguments.get("filter", [])
+    if not isinstance(filter_by, list):
+        filter_ = [filter_]
+
+    for filter_by_, filter__ in zip(filter_by, filter_):
+        query = query.filter(getattr(model, filter_by_) == filter__)
+
+    if "first" in arguments:
+        query = (
+            query.with_entities(
+                model,
+                func.row_number()
+                .over(partition_by=getattr(parent, field))
+                .label("row_count"),
+            )
+            .from_self()
+            .filter(column("row_count") <= arguments["first"])
+        )
+
+    return query
+
+
+def _resolve_related(field_def, query, model):
+    field = field_def["field"]
+    arguments = field_def["arguments"]
+    children = field_def["children"]
+
+    if hasattr(model, field) and isinstance(
+        getattr(model, field).property, RelationshipProperty
+    ):
+        model_ = getattr(model, field).property.mapper.class_
+        model_alias = aliased(
+            model_, build_sub_query(field, model, model_, arguments).subquery()
+        )
+        query = query.outerjoin(model_alias).options(
+            contains_eager(getattr(model, field), alias=model_alias)
+        )
+        model = model_
+
+    for child in children:
+        query = _resolve_related(child, query, model)
+
+    return query
+
+
+def resolve_related(info, query, model):
+    for field_def in get_node_fields(info, info.field_nodes[0], info.fragments):
+        query = _resolve_related(field_def, query, model)
+
+    return query
+
+
+def resolve_many(cls, obj, info, *args, **kwargs):
+    model = cls.Meta.model
+    query = build_query(model, *args, **kwargs)
+    query = resolve_related(info, query, model)
     return query.all()
 
 

@@ -4,7 +4,7 @@ from sqlalchemy import types
 from sqlalchemy.orm import interfaces
 from sqlalchemy.dialects import postgresql
 
-from ..fields import Field
+from ..fields import Field, Argument
 from ..types import Boolean, ID, Int, String, JSON
 
 
@@ -17,7 +17,21 @@ def relationship_to_field(relationship):
     if direction == interfaces.MANYTOONE or not relationship.uselist:
         return Field(model.__name__)
     elif direction in (interfaces.ONETOMANY, interfaces.MANYTOMANY):
-        return Field(model.__name__, many=True)
+        return Field(
+            model.__name__,
+            many=True,
+            args={
+                "first": Argument(type_=Int, many=True, required=False),
+                "filter": Argument(type_=String, many=True, required=False),
+                "filter_by": Argument(
+                    type_=f"{model.__name__}Columns", many=True, required=False
+                ),
+                "order": Argument(type_="SQLAOrder", many=True, required=False),
+                "order_by": Argument(
+                    type_=f"{model.__name__}Columns", many=True, required=False
+                ),
+            },
+        )
 
 
 def column_to_field(column):

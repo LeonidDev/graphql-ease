@@ -55,8 +55,6 @@ def build_sub_query(field, parent, model, arguments):
         argument_def["name"]: argument_def["value"] for argument_def in arguments
     }
 
-    print(field, arguments)
-
     filter_by = arguments.get("filter_by", [])
     if not isinstance(filter_by, list):
         filter_by = [filter_by]
